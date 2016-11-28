@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<meta charset="UTF-8">
+<title></title>
+
+<xmp theme="united" style="display:none;">
+
+Well-known text (WKT)
+---------------------
+
+[Well-known text (WKT)](https://en.wikipedia.org/wiki/Well-known_text): язык разметки для описания картографических векторных объектов, систем координат и преобразований между координатами. Существует также бинарный стандарт (WKB), который используется для хранения данных в БД.
+
+
+WKT определяет 18 типов объектов. Наиболее значимые:
+
+**Geometry** 
+
+базовый формат геометрических данных
+
+**Point, MultiPoint**
+
+    POINT (30 10)
+    MULTIPOINT ((10 40), (40 30), (20 20), (30 10)) 
+    MULTIPOINT (10 40, 40 30, 20 20, 30 10)
+
+**LineString, MultiLineString**
+
+    LINESTRING (30 10, 10 30, 40 40)
+    MULTILINESTRING ((10 10, 20 20, 10 40), (40 40, 30 30, 40 20, 30 10))
+
+**Polygon, MultiPolygon**
+
+    POLYGON ((35 10, 45 45, 15 40, 10 20, 35 10), (20 30, 35 35, 30 20, 20 30))
+    MULTIPOLYGON (((40 40, 20 45, 45 30, 40 40)), ((20 35, 10 30, 10 10, 30 5, 45 20, 20 35), (30 20, 20 15, 20 25, 30 20)))
+
+**GeometryCollection**
+
+    GEOMETRYCOLLECTION(POINT(4 6),LINESTRING(4 6,7 10))
+
+
+
+
+
+
+
+</xmp>
+<script src="../strapdown/v/0.1/strapdown.js"></script>
+</html>
