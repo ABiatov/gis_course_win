@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<meta charset="UTF-8">
+<title>MapServer MapScript</title>
+
+<xmp theme="united" style="display:none;">
+
+Установка Python MapScript
+--------------------------
+
+Для установки Python [MapScript](http://mapserver.org/mapscript/index.html)
+API воспользуемся инсталлером OSGeo4W и установим пакет *Web &#10139; mapscript-python-dev*.
+
+Чтобы убедиться в том, что MapScript установлен корректно, выполните
+команду (в OSGeo4W Shell):
+
+    python -c "import mapscript"
+
+Если в результате выполнения данной команды вы не увидите никаких сообщений
+об ошибках, значит MapScript установлен корректно.
+
+Создание простого CGI файла на Python
+-------------------------------------
+
+Если данный пункт не работает, то переходить к следующему
+смысла нет.
+
+В директории *C:/OSGeo4W64/bin* создайте файл *test.py*
+следующего содержания:
+
+    #!C:\OSGeo4W64\bin\python.exe
+    print("""Content-Type: text/plain
+
+    Hello, world!""")
+
+Откройте в браузере URL `http://localhost/cgi-bin/test.py`,
+вы должны увидеть текст *Hello, world!*.
+
+Cоздание враппера c использования MapScript
+-------------------------------------------
+
+Сфера применения MapScript очень широка. Можно, например, в соответствии
+с переданными клиентом параметрами HTTP запроса генерировать каждый
+раз новый map-файл, что открывает возможности создания очень гибких
+сервисов. Можно написать собственные обработчики для различных
+запросов и т.д. В качестве примера напишем универсальный враппер для
+WMS(WFS) запросов.
+
+В настоящий момент времени адреса веб сервисов имеют вид:
+
+    http://localhost/cgi-bin/mapserv.exe?map=C:/Users/dr/mapserver/wfs.map&
+    http://localhost/cgi-bin/mapserv.exe?map=C:/Users/dr/mapserver/wms.map&
+
+Как вы можете заметить, в этом случае адрес получается довольно
+длинным, да и к тому же указывается путь до map-файла
+в файловой системе. Если мы переместим наш map-файл в другое место,
+то будем вынуждены сообщить об этом всем клиентам, использующим наш сервис,
+иначе он будет недоступен. Для решения данной проблемы существует
+множество [способов](http://mapserver.org/ogc/wms_server.html#changing-the-online-resource-url),
+рассмотрим один из них.
+
+Прежде всего убедитесь в том, что *mapscript* корректно запускается
+из стандартной консоли при задании нужных переменных окружения
+`PYTHONPATH` и `PATH`:
+
+    set PYTHONPATH=C:\OSGeo4W64\apps\python27\lib\site-packages
+    set PATH=C:\OSGeo4W\bin
+
+После чего запустите Python и убедитесь в том, что
+*mapscript* импортируется без ошибок:
+
+    >C:\OSGeo4W\bin\python
+    >>>import mapscript
+
+В случае успеха добавьте в конфиг Apache *httpd.conf*
+следующие строки:
+
+    SetEnv PYTHONPATH C:\OSGeo4W64\apps\python27\lib\site-packages
+    SetEnv PATH C:\OSGeo4W64\bin
+
+Переходим в каталог *C:/OSGeo4W64/bin* и создаём 2 файла *wms* и *wfs*.
+
+В каждый файл помещаем следующий код. Для *wms*:
+
+    #!C:\OSGeo4W64\bin\python.exe
+    import mapscript
+    req = mapscript.OWSRequest()
+    req.loadParams()
+    map = mapscript.mapObj('C:/Users/dr/mapserver/wms.map')
+    map.OWSDispatch(req)
+
+Для *wfs*:
+
+    #!C:\OSGeo4W64\bin\python.exe
+    import mapscript
+    req = mapscript.OWSRequest()
+    req.loadParams()
+    map = mapscript.mapObj('C:/Users/dr/mapserver/wfs.map')
+    map.OWSDispatch(req)
+
+Затем в файлах *wms.map* и *wfs.map* изменим значение **wms_onlineresource**
+и **wfs_onlineresource** на:
+
+    http://10.22.0.9/cgi-bin/wms?
+    http://10.22.0.9/cgi-bin/wfs?
+
+Проверьте результат на примере подключения в QGIS.
+
+</xmp>
+<script src="../strapdown/v/0.1/strapdown.js"></script>
+</html>

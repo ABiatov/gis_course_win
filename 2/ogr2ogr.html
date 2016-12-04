@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Преобразование данных различных форматов с помощью ogr2ogr</title>
+</head>
+
+<body>
+<xmp theme="simplex" style="display:none;">
+
+* [OGR Utility Programs](http://gdal.org/ogr_utilities.html)
+* [GDAL Utilities](http://gdal.org/gdal_utilities.html)
+
+### 1. Получение информации о данных
+
+    $ ogrinfo RU-MOW.sxf
+    $ ogrinfo -so RU-MOW.sxf water
+    $ ogrinfo --config SXF_RSC_FILENAME osm.rsc RU-MOW.sxf
+
+### 2. Конвертация
+
+    $ ogrinfo --formats
+    $ ogr2ogr -f "MapInfo File" topo2km-rus.tab topo2km-rus.shp
+    $ ogr2ogr -f "MapInfo File" -where "ZONE='s'"  topo2km-rus.tab topo2km-rus.shp
+    $ ogr2ogr -f GeoJSON -select name output.geojson input.geojson
+
+### 3. Работа с комплексными наборами данных
+
+    $ ogr2ogr output_dir RU-MOW.sxf
+    $ ogr2ogr -f GeoJSON boundary.geojson RU-MOW.sxf boundary
+
+### 4. Конвертация из форматов не ограниченных по типу геометрии
+
+    $ ogr2ogr -skipfailures input_POINT.shp input.mif -nlt "POINT"
+    $ ogr2ogr -skipfailures output_LINESTRING.shp input.mif -nlt "LINESTRING"
+    $ ogr2ogr -skipfailures output_LINESTRING.shp input.mif -nlt "LINESTRING" -sql "SELECT * FROM Input WHERE OGR_GEOMETRY='LINESTRING'"
+
+### 5. Использование OGR SQL
+
+    $ ogr2ogr -f "MapInfo File" -sql "SELECT * FROM 'topo2km-rus' WHERE INDEXNUM='V3-1,2,3'" topo2km-rus.tab topo2km-rus.shp
+    $ ogr2ogr -f "MapInfo File" topo2km-rus.tab topo2km-rus.shp -sql "SELECT I2KMZSTR, I2KM, INDEXNUM FROM topo2km-rus"
+    $ ogr2ogr -f "MapInfo File" topo2km-rus.tab topo2km-rus.shp -sql "SELECT I2KMZSTR AS 'i2kmzstr', I2KM AS '2km', INDEXNUM FROM 'topo2km-rus'"
+    $ ogr2ogr -f "MapInfo File" topo2km-rus.tab topo2km-rus.shp -sql "SELECT CAST (I10KM AS CHARACTER(4)), CAST (I2KM AS FLOAT) FROM 'topo2km-rus'"
+    $ ogr2ogr -skipfailures output_MULTIPOINT.shp input.MIF -nlt "MULTIPOINT" -where "OGR_GEOMETRY='MULTIPOINT'"
+
+### 6. Перепроецирование
+
+    $ ogr2ogr -a_srs "EPSG:4284" -f "ESRI Shapefile" topo2km-rus2.shp topo2km-rus.shp
+    $ ogr2ogr -s_srs "EPSG:4326" -t_srs "EPSG:900913" -f "ESRI Shapefile" topo2km-rus3.shp topo2km-rus2.shp
+
+### 7. Обрезка
+
+    $ ogr2ogr -clipsrc 41.4 46.4 41.6 46.6 output.shp input.shp
+    $ ogr2ogr -clipsrc clipbound.shp output.shp input.shp
+
+### 8. Объединение
+
+    $ ogr2ogr result.shp input1.shp
+    $ ogr2ogr -update -append result.shp input2.shp -nln result
+
+### 9. Генерализация
+
+    $ ogr2ogr -f "GeoJSON" -lco COORDINATE_PRECISION=1 output.json input.shp
+
+
+### 10. Работа с PostgreSQL/PostGIS
+
+Вставка (добавление) записей в таблицу PostgreSQL данных из файла data.shp. Таблица должна существовать и иметь такие же поля, как и shp-файл.
+
+    $ ogr2ogr -append  -t_srs "+init=epsg:4326" -f PostgreSQL PG:"host=адрес user=имя_пользователя dbname=имя_базы" data.shp
+
+Перезаписывает test таблицу PostgreSQL данными из файла test.tab Таблица не обязана существовать.
+
+    $ ogr2ogr -append -overwrite -s_srs "+init=epsg:4326" -f PostgreSQL PG:"host=адрес user=имя_пользователя dbname=имя_базы" test.tab
+
+Перезаписывает данные из файла data в таблицу PostgreSQL. Таблица будет носить имя не data, а test1. Таблица test1 не обязана существовать.
+
+    $ ogr2ogr -append -overwrite -t_srs "+init=epsg:4326" -f "PostgreSQL"  PG:"host=адрес user=имя_пользователя dbname=test" data.shp -nln test1
+
+Наоборот: из таблицы PostgreSQL "adm" базы ipc конвертирует в allei.tab формата MapInfo.
+
+    $ ogr2ogr -f "MapInfo File" allei.tab  PG:"host=адрес user=пользователь dbname=ipc" "adm"
+
+Из таблицы PostgreSQL "adm" базы ipc конвертирует в shape-файл с использованием выражения sql.
+
+    $ ogr2ogr -f "ESRi Shapefile" output.shp PG:"host=адрес user=пользователь dbname=ipc" -sql "SELECT * from adm"
+
+
+Примеры использования утилит для растровых данных приводятся в
+другой [статье](http://gis-lab.info/qa/gdal-examples.html).
+
+</xmp>
+<script src="../strapdown/v/0.2/strapdown.js"></script>
+</body>
+</html>
