@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<meta charset="UTF-8">
+<title></title>
+
+<xmp theme="united" style="display:none;">
+
+Линейные референсные системы
+----------------------------
+
+В GRASS есть несколько комманд для работы с ЛРС:
+
+* v.lrs.create создание ЛРС;
+* v.lrs.segment создание сегментов ЛРС;
+* v.lrs.label создание пикетов на ЛРС;
+* v.lrs.where запросы к ЛРС.
+
+Рассмотрим задачу создания ЛРС на примере автобусного маршрута
+
+### Создание ЛРС
+
+    # several bus lines available
+    g.region vect=busroutesall -p n=n+100 s=s-100
+    d.erase
+    d.vect -c busroutesall
+    # bus stops for all lines
+    d.vect -c busstopsall icon=basic/triangle
+    # look at the attributes
+    v.db.select busstopsall
+
+Будем работать с маршрутом номер 1.
+
+    g.copy vect=busroute1,route1
+    g.copy vect=busstopsall,stopsall
+
+
+    # check the selection and extract stops to a new map
+    v.db.select stopsall  where="ROUTES LIKE '%1%' AND ROUTES NOT LIKE '%11%'"
+    v.extract stopsall out=stops1  where="ROUTES LIKE '%1%' AND ROUTES NOT LIKE '%11%'"
+
+
+Упростим себе жизнь создав одну полилинию, представляющую маршрут:
+
+
+    v.build.polylines route1 out=route1tmp
+    # substitute old ’route1’ with new map (but we lose the table)
+    v.category route1tmp out=route1 op=add --o
+    g.remove vect name=route1tmp -f
+
+
+На следующем шаге подготовим входные слои для ЛРС, для этого добавим поле в котором будет храниться номер маршрута, которому принадлежит остановка:
+
+    # add column to link the route with the bus stop
+    v.db.addtable route1 col="lid integer"
+    v.db.update route1 col=lid val=1
+    v.db.select route1
+
+
+    v.db.addcolumn stops1 col="lid integer"
+    v.db.update stops1 col=lid val=1
+    v.db.select stops1
+
+    # define the order, offsets of the bus stops, preparing table
+    v.db.addcolumn stops1 col="start_mp double precision, start_off double precision, end_mp double precision,end_off double precision"
+
+    # check direction of the vector line for the bus stops order
+    g.region vect=route1 n=n+100 s=s-100 -p
+    d.erase
+    d.vect route1 disp=shape,dir,topo col=grey lcol=blue
+    d.vect stops1  attr=cat size=10 label_bgcolor=white
+    d.vect stops1 icon=basic/circle fcol=green
+
+
+Видим, что остановки не слишком хорошо "прилегают" к маршруту. В последующем при создании ЛРС нам придется использовать порог "прищелкивания".
+
+
+Обратите внимание на пересекающиеся линии маршрутов. На пересечении нет узла! Перенумеруем остановки так, чтобы они составляли последовательную нумерацию. 
+
+    v.db.update stops1 col=start_mp where="cat=7" val=1
+    v.db.update stops1 col=start_mp where="cat=13" val=2
+    v.db.update stops1 col=start_mp where="cat=14" val=3
+    v.db.update stops1 col=start_mp where="cat=22" val=4
+    v.db.update stops1 col=start_mp where="cat=83" val=5
+    v.db.update stops1 col=start_mp where="cat=30" val=6
+    v.db.update stops1 col=start_mp where="cat=55" val=7
+    v.db.update stops1 col=start_mp where="cat=56" val=8
+    v.db.update stops1 col=start_mp where="cat=82" val=9
+    v.db.update stops1 col=start_mp where="cat=58" val=10
+    v.db.update stops1 col=start_mp where="cat=38" val=11
+    v.db.update stops1 col=start_mp where="cat=37" val=12
+    v.db.update stops1 col=start_mp where="cat=36" val=13
+    v.db.update stops1 col=start_mp where="cat=35" val=14
+    v.db.update stops1 col=start_mp where="cat=34" val=15
+    v.db.update stops1 col=start_mp where="cat=103" val=16
+    v.db.update stops1 col=start_mp where="cat=31" val=17
+    v.db.update stops1 col=start_mp where="cat=29" val=18
+    v.db.update stops1 col=start_mp where="cat=24" val=19
+    v.db.update stops1 col=start_mp where="cat=28" val=20
+    v.db.update stops1 col=start_mp where="cat=96" val=21
+    v.db.update stops1 col=start_mp where="cat=27" val=22
+    v.db.update stops1 col=start_mp where="cat=60" val=23
+    v.db.update stops1 col=start_mp where="cat=10" val=24
+    v.db.update stops1 col=start_mp where="cat=9" val=25
+
+
+    # verify route
+    v.db.select route1
+
+
+    # verify stops
+    v.db.select stops1 col=cat,ROUTES,start_mp,start_off,end_mp,end_off,lid
+
+
+Данные подготовлены к созданию ЛРС. Но если запустить сейчас команду v.lrs.create, получится ошибка о том, что у нас неверный порядок узлов.
+Дело в том, что остановка 30 находится ближе к "чужому" сегменту. Воспользуемся инструментами редактирования и "подвинем" остановку ближе к ее целевому положению.
+
+    v.edit stops1 tool=move cats=30 move="18,-12,0"
+
+
+Since the bus stops are not perfectly located on the route, we have to define a
+reasonable threshold to capture all bus stops. To find the maximum distance
+that we will use later as a threshold, we run v.distance:
+
+Как отмечалось, остановки лежат не слишком близко к линии маршрута. Найдем расстояния от остановок до линии.
+
+    # find maximum distance between bus stops and route1
+    v.distance from=stops1 to=route1 upload=dist -p
+
+С учетом найденных расстояний прикрепим остановки к линии и создадим ЛРС:
+
+    v.lrs.create in_lines=route1 points=stops1 out=route1_lrs err=lrs_error lidcol=lid pidcol=lid rstable=route1_lrs thre=45
+
+    # !!!!!!!!!!!!
+    v.build route1_lrs
+
+    d.erase
+    # show route and nodes
+    d.vect route1 disp=shape,topo col=grey lcol=blue
+    d.vect stops1 icon=basic/circle fcol=green
+    # show bus stop numbers (bottom right labels)
+    d.vect stops1  attr=cat size=10 label_bgcolor=white lcol=green yref=top
+    # show milepost numbers (top right labels)
+    d.vect stops1 attr=start_mp size=10 label_bgcolor=white lcol=red yref=bottom
+
+
+
+### Запросы к ЛРС
+
+На этом этапе можно создавать запросы к ЛРС. Например, определим насколько близка точка с заданными координатами к остановке.
+    # these coordinates can be retrieved via GPS
+    echo "638632|224857" | v.in.ascii out=position in=-
+
+
+    g.region vect=route1 n=n+100 s=s-100 -p
+
+    d.erase
+    # show route and nodes
+    d.vect route1 disp=shape,topo col=grey lcol=blue
+    # show bus stop numbers (bottom right labels)
+    d.vect stops1 attr=cat size=10 bgcolor=white lcol=green yref=top
+    # show milepost numbers (top right labels)
+    d.vect stops1 attr=start_mp size=10 bgcolor=white lcol=blue yref=bottom
+    # show markers
+    d.vect stops1 icon=basic/circle fcol=green
+    d.vect position col=red icon=basic/marker size=20
+
+
+    # check to which bus stop the milepost 6 belongs to
+    # a) get corresponding bus stop number "upstream"
+    v.db.select stops1 col=cat,start_mp where="start_mp=6"
+
+    # b) get next bus stop number along the tour
+    v.db.select stops1 col=cat,start_mp where="start_mp=7"
+
+Итак, точка лежит после остановки 30 и до остановки 55. При этом наша позиция находится на 134.5 метров после остановки 30
+
+Можно получить больше информации:
+
+    db.select sql="SELECT * FROM route1_lrs WHERE start_mp=6"
+
+
+Relevant entries are: start_map (here: 1946.1m) which is the distance in map
+units from the beginning of the vector line to the milepost found before the
+queried position in LRS direction; start_mp (here: 6) which is the milepost
+before the queried position in LRS direction; end_mp (here: 7) which is the
+next milepost to be reached; and end_map which is the distance in map units
+from the beginning of the vector line to the milepost found before the queried
+position in LRS direction.
+
+Обратите внимание на параметр start_map (1946.1 расстояние от начала маршрута), start_mp (6),
+end_mp (7) и end_map.
+
+Ну и, наконец, определим, до какой остановки ближе:
+
+
+    db.select sql="SELECT (end_map - start_map) as dist_30_55 FROM route1_lrs WHERE start_mp=6"
+    db.select sql="SELECT (end_map - start_map - 134.5) as dist_to_55 FROM route1_lrs WHERE start_mp=6"
+
+
+
+</xmp>
+<script src="../strapdown/v/0.1/strapdown.js"></script>
+</html>
