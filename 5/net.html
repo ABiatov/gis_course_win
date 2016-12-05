@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<meta charset="UTF-8">
+<title></title>
+
+<xmp theme="united" style="display:none;">
+
+Работа с сетями в GRASS GIS
+---------------------------
+
+Основные модули для сетевого анализа:
+
+* Создание сети: v.net;
+* Кратчайшие пути: d.path and v.net.path;
+* Задача коммивояжера: v.net.salesman;
+* Подсети: v.net.alloc;
+* Минимальное остовное дерево: v.net.steiner;
+* Изорастояния: v.net.iso.
+
+Задачи решаются с применением эвристик, решение задач обычно субоптимально.
+
+
+### Данные для работы
+
+Для примера будем работать не на всей территории, а на ее части. Для этого вырежем слой дорог в центре области:
+
+    g.region vect=census_wake2000 -p
+    d.mon wx0
+    d.vect census_wake2000
+    d.vect census_wake2000 disp=cat
+    v.extract census_wake2000 out=census_raleigh list=1-33
+    v.select ain=streets_wake bin=census_raleigh out=streets_rlgh op=overlap
+    g.region vect=streets_rlgh
+    d.erase
+    d.vect streets_rlgh
+
+Будем использовать полученный слой дорог streets_rlgh во всех дальнейших примерах.
+
+### Создание сети, изохроны
+
+В районе точки с координатами -78.638259E, 35.77465N находится отель. Допустим мы ищем парковые зоны в пешей доступности. Первым делом определим координаты отеля в нужной системе координат:
+
+    # east north
+    echo "-78.638259 35.77465" | m.proj -i input=-
+
+Создадим точку с данными координатами:
+
+    echo "642306.78|224657.80|1" | v.in.ascii out=myhotel input=
+
+Расстояние от отеля до дороги:
+
+    v.distance -p from=myhotel to=streets_rlgh upload=dist 
+
+
+Отель довольно близок к дороге, но нам нужно присоединить эту точку к дорожной сети:
+
+    v.net streets_rlgh points=myhotel out=streets_net op=connect thresh=30
+    g.region vect=myhotel n=n+500 s=s-500 w=w-500 e=e+500 -p
+    d.erase
+    d.vect streets_net col=green
+    d.vect streets_rlgh
+    d.vect myhotel col=red icon=basic/pushpin
+
+
+As final preparation step, we assign costs to navigate on the network. As
+pedestrians, we dislike to walk along dangerous streets and we want to avoid
+highways altogether. The existing maximum speed information helps us to
+easily assign costs in a new cost column (you can also distinguish between
+backward and forward moving by simply generating two different columns).
+We penalize the big streets by assigning them high cost:
+
+Подготовительный этап почти закончен. Осталось задать стоимости ребрам графа. В качестве пешехода мы предпочтем двигаться по улицам с небольшим трафиком и ннизкими скоростями движения. Для этого создадим новое поле в векторном слое со стоимостью ребра.
+
+    v.db.addcolumn streets_net col="navcost double precision"
+    v.db.update streets_net col=navcost val=100 where="SPEED <= 25"
+    v.db.update streets_net col=navcost val=100000 where="SPEED > 25"
+
+    g.region vect=myhotel n=n+2000 s=s-2000 w=w-2000 e=e+2000 -p
+    d.erase
+    d.vect streets_net col=green where="navcost=100"
+    d.vect streets_net col=red
+    where="navcost=100000"
+    d.vect myhotel col=red icon=basic/pushpin size=15
+
+
+Now the vector network is ready to navigate. We define a set of walking
+distances to make it easier to choose the nearest park. The parameter ccats
+allows you to calculate the iso-distance map only for selected nodes (centers).
+To simplify the request, since we have only one center, we can just specify a
+large range to use it:
+
+Наконец, параметры сети заданы. Определим расстояние до ближайшего парка. Параметр ccats позволяет вычислять расстояния только для заданных узлов. Поскольку у нас только один узел, мы можем безопасно указать сразу большой диапазон:
+
+    # the hotel point is on nlayer 2
+    # specify range of center cats (easier to catch all centers)
+
+    # v.net.iso in=streets_net out=streets_net_iso ccats=1-1000000 nlayer=2 costs=200,400,600,800 afcolumn=navcost
+    v.net.iso in=streets_net out=streets_net_iso ccats=1-1000000 nlayer=2 costs=200,400,600,800
+
+    v.category streets_net_iso option=report
+
+    d.erase
+    # show high traffic streets to be avoided
+    d.vect streets_net col=grey where="navcost=100000" width=4
+
+    d.vect streets_net_iso col=green cats=1 width=4
+    d.vect streets_net_iso col=yellow cats=2 width=4
+    d.vect streets_net_iso col=orange cats=3 width=3
+    d.vect streets_net_iso col=red cats=4 width=3
+    d.vect streets_net_iso col=grey cats=5 width=4
+
+    d.vect myhotel col=red fcol=green icon=basic/pushpin size=15
+
+Осталось положить на карту парки:
+
+    d.vect geonames_wake where="FEATURECOD='PRK'" fcol=green icon=basic/diamond lsize=10 yref=bottom xref=left
+    d.vect geonames_wake attribute_col=NAME fcol=green where="FEATURECOD='PRK'" lsize=10 yref=bottom xref=left
+
+</xmp>
+<script src="../strapdown/v/0.1/strapdown.js"></script>
+</html>
