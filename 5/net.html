@@ -116,6 +116,50 @@ large range to use it:
     d.vect geonames_wake where="FEATURECOD='PRK'" fcol=green icon=basic/diamond lsize=10 yref=bottom xref=left
     d.vect geonames_wake attribute_col=NAME fcol=green where="FEATURECOD='PRK'" lsize=10 yref=bottom xref=left
 
+
+### Кратчайшее расстояние
+
+Для примера посчитаем расстояния между двумя госпиталями:
+
+    g.region vect=streets_net -p
+    d.erase
+    d.vect streets_net
+    d.vect hospitals fcol=red icon=basic/diamond
+    d.vect hospitals  attr=NAME
+
+
+Создаем сеть, присоединив госпитали:
+
+    v.net streets_rlgh points=hospitals out=streets_hnet op=connect thresh=200
+    d.erase
+    d.vect streets_hnet col=red
+    d.vect streets_rlgh
+
+Стоимость ребер графа в зависимости от скорости движения:
+
+    v.db.addcolumn streets_hnet col="navcost double precision"
+    v.db.update streets_hnet col=navcost val="1.0/SPEED * 100."
+    v.db.select streets_hnet col=navcost,speed
+
+
+hen we can calculate the shortest path between two given nodes. The patient
+has to be transported from the Dorothea Dix Hospital to the Rex Hospital
+Hospital. Before calculating the shortest path, we need to find the node cat-
+egory numbers of these two hospitals:
+
+    d.erase
+    d.vect streets_hnet layer=2
+    d.vect streets_hnet layer=2 disp=cat
+    # Rex: 8; Dorothea Dix: 5
+    # ID as first number, then cat1 and cat2
+    # echo "1 8 5" | v.net.path streets_hnet out=spath afcolumn=navcost
+    echo "1 8 5" | v.net.path streets_hnet out=spath afcolumn=navcost
+    d.vect streets_hnet
+    d.vect spath col=red width=2
+
+
+
+
 </xmp>
 <script src="../strapdown/v/0.1/strapdown.js"></script>
 </html>
